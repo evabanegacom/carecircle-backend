@@ -11,6 +11,61 @@ public static class AdminEndpoints
 {
     public static void MapPeerCareAdmin(this WebApplication app)
     {
+        app.MapGet("/api/admin/conditions", async (PeerCareDbContext db, CancellationToken ct) =>
+            Results.Ok(await db.Conditions.AsNoTracking().OrderBy(c => c.Name)
+                .Select(c => new { c.Id, c.Name, c.Slug, c.Category, c.Active }).ToListAsync(ct)))
+            .RequireAuthorization("Admin");
+
+        app.MapPost("/api/admin/conditions", async (AdminConditionRequest request, HttpContext http, PeerCareDbContext db,
+            PeerAuditService audit, CancellationToken ct) =>
+        {
+            var name = request.Name.Trim();
+            var category = request.Category.Trim();
+            if (name.Length is < 2 or > 120 || category.Length is < 2 or > 80)
+                return Results.BadRequest(new { message = "Enter a topic name and category." });
+            var slug = new string(name.ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+            while (slug.Contains("--")) slug = slug.Replace("--", "-");
+            if (await db.Conditions.AnyAsync(c => c.Slug == slug, ct))
+                return Results.Conflict(new { message = "A topic with that name already exists." });
+            var condition = new Condition { Name = name, Slug = slug, Category = category, Active = request.Active };
+            db.Conditions.Add(condition);
+            await db.SaveChangesAsync(ct);
+            var communitySlug = $"condition-{slug}";
+            db.Communities.Add(new Community
+            {
+                Name = $"{name} community", Slug = communitySlug, ConditionId = condition.Id, Status = request.Active ? "active" : "inactive",
+                Description = $"A place to explore shared experiences and ask questions related to {name}. Community labels do not confirm a diagnosis.",
+                Guidelines = "Share personal experiences with care. Do not ask members to diagnose or prescribe. Avoid identifying details, medication doses, and urgent-care requests. Talk with a qualified health professional about personal medical decisions."
+            });
+            await db.SaveChangesAsync(ct);
+            await audit.RecordAsync(ApiSupport.CurrentUserId(http.User), "condition_created", "condition", condition.Id, ct);
+            return Results.Created("/api/admin/conditions", new { condition.Id, condition.Name, condition.Slug, condition.Category, condition.Active });
+        }).RequireAuthorization("Admin");
+
+        app.MapPut("/api/admin/conditions/{id:guid}", async (Guid id, AdminConditionRequest request, HttpContext http,
+            PeerCareDbContext db, PeerAuditService audit, CancellationToken ct) =>
+        {
+            var name = request.Name.Trim();
+            var category = request.Category.Trim();
+            if (name.Length is < 2 or > 120 || category.Length is < 2 or > 80)
+                return Results.BadRequest(new { message = "Enter a topic name and category." });
+            var condition = await db.Conditions.SingleOrDefaultAsync(c => c.Id == id, ct);
+            if (condition is null) return Results.NotFound();
+            condition.Name = name;
+            condition.Category = category;
+            condition.Active = request.Active;
+            var community = await db.Communities.SingleOrDefaultAsync(c => c.ConditionId == id, ct);
+            if (community is not null)
+            {
+                community.Name = $"{name} community";
+                community.Description = $"A place to explore shared experiences and ask questions related to {name}. Community labels do not confirm a diagnosis.";
+                community.Status = request.Active ? "active" : "inactive";
+            }
+            await db.SaveChangesAsync(ct);
+            await audit.RecordAsync(ApiSupport.CurrentUserId(http.User), "condition_updated", "condition", id, ct);
+            return Results.Ok(new { condition.Id, condition.Name, condition.Slug, condition.Category, condition.Active });
+        }).RequireAuthorization("Admin");
+
         app.MapGet("/api/admin/queue", async (PeerCareDbContext db, CancellationToken ct) => Results.Ok(new
         {
             pendingPosts = await db.Posts.CountAsync(p => p.Status == "pending", ct),
@@ -41,6 +96,7 @@ public static class AdminEndpoints
             if (moderatorId is null) return Results.Unauthorized();
             var post = await db.Posts.Include(p => p.User).SingleOrDefaultAsync(p => p.Id == id, ct);
             if (post is null) return Results.NotFound();
+            var wasPublished = post.Status == "published";
             var action = request.Action.Trim().ToLowerInvariant();
             if (action is not ("approve" or "reject" or "edit" or "remove" or "escalate"))
                 return Results.BadRequest(new { message = "Choose an available moderation action." });
@@ -74,6 +130,8 @@ public static class AdminEndpoints
             if (action is "approve" or "reject")
                 await notifications.NotifyAsync(post.UserId, action == "approve" ? "post_approved" : "post_rejected",
                     action == "approve" ? "Your story has been approved and is now visible to the community." : "Your story was not approved. Sign in to review the moderator's note.", id, ct);
+            if (action == "approve" && !wasPublished && post.Kind == "question")
+                await notifications.NotifyCommunityMembersAsync(post.ConditionId, post.UserId, post.Id, ct);
             if (action == "remove") await notifications.NotifyAsync(post.UserId, "post_removed", "A moderator removed one of your posts after review.", id, ct);
             return Results.Ok(new { post.Id, post.Status, action });
         }).RequireAuthorization("Moderator");

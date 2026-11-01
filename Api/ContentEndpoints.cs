@@ -188,6 +188,8 @@ public static class ContentEndpoints
             if (newFacility && post.Status == "published") { post.Status = "pending"; post.PublishedAt = null; }
             db.Posts.Add(post);
             await db.SaveChangesAsync(ct);
+            if (post.Status == "published" && post.Kind == "question")
+                await notifications.NotifyCommunityMembersAsync(post.ConditionId, user.Id, post.Id, ct);
             if (post.Status == "published" && post.EmergencyFlag)
                 await notifications.NotifyAsync(user.Id, "post_published", "Your story is published. If it describes an emergency, go to the nearest hospital.", post.Id, ct);
             return Results.Created($"/api/posts/{post.Id}", new

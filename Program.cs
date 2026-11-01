@@ -228,6 +228,7 @@ app.MapPeerCareHealth();
 app.MapPeerCareContent();
 app.MapPeerCareDirectory();
 app.MapPeerCareCommunities();
+app.MapPeerCareCommunityAdmin();
 app.MapPeerCareUserSafety();
 app.MapPeerCareAppeals();
 app.MapPeerCareProfessional();

@@ -41,5 +41,7 @@ public sealed record HealthEntryRequest(string EntryType, string? Title, string 
 public sealed record ProviderReviewRequest(int? Rating, string ReviewText, DateOnly? VisitDate);
 public sealed record UserAppealRequest(Guid ActionId, string Reason);
 public sealed record AdminAppealRequest(string Status, string? DecisionNote);
+public sealed record AdminConditionRequest(string Name, string Category, bool Active = true);
+public sealed record AdminCommunityRequest(string Name, string Slug, string Description, string Guidelines, string Status, Guid? ConditionId);
 public sealed record FacilityVerificationRequest(string? Source, DateTimeOffset? LastVerifiedAt);
 public sealed record ShareHealthEntriesRequest(Guid[] EntryIds, Guid ConditionId, string Title, bool Confirmed);

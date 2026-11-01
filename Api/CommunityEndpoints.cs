@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using PeerCare.Contracts;
 using PeerCare.Data;
 using PeerCare.Domain;
+using PeerCare.Services;
 
 namespace PeerCare.Api;
 
@@ -64,5 +66,86 @@ public static class CommunityEndpoints
             if (membership is not null) { membership.Status = "left"; await db.SaveChangesAsync(ct); }
             return Results.Ok(new { joined = false });
         }).RequireAuthorization();
+    }
+
+    public static void MapPeerCareCommunityAdmin(this WebApplication app)
+    {
+        app.MapGet("/api/admin/communities", async (PeerCareDbContext db, CancellationToken ct) =>
+            Results.Ok(await db.Communities.AsNoTracking().OrderBy(c => c.Name).Select(c => new
+            {
+                c.Id, c.Name, c.Slug, c.Description, c.Guidelines, c.Status, c.ConditionId,
+                condition = c.Condition == null ? null : c.Condition.Name,
+                memberCount = db.CommunityMemberships.Count(m => m.CommunityId == c.Id && m.Status == "joined")
+            }).ToListAsync(ct))).RequireAuthorization("Admin");
+
+        app.MapPost("/api/admin/communities", async (AdminCommunityRequest request, HttpContext http,
+            PeerCareDbContext db, PeerAuditService audit, CancellationToken ct) =>
+        {
+            var name = request.Name.Trim();
+            var slug = NormalizeCommunitySlug(request.Slug);
+            var description = request.Description.Trim();
+            var guidelines = request.Guidelines.Trim();
+            var status = request.Status.Trim().ToLowerInvariant();
+            if (name.Length is < 2 or > 120 || slug.Length is < 2 or > 120 || description.Length > 1000 ||
+                guidelines.Length > 3000 || status is not ("active" or "inactive"))
+                return Results.BadRequest(new { message = "Check the community name, slug, description, guidelines, and status." });
+            if (await db.Communities.AnyAsync(c => c.Slug == slug, ct))
+                return Results.Conflict(new { message = "A community with that URL slug already exists." });
+            if (request.ConditionId is not null && !await db.Conditions.AnyAsync(c => c.Id == request.ConditionId, ct))
+                return Results.BadRequest(new { message = "Choose a valid topic or leave it unassigned." });
+
+            var community = new Community { Name = name, Slug = slug, Description = description, Guidelines = guidelines, Status = status, ConditionId = request.ConditionId };
+            db.Communities.Add(community);
+            await db.SaveChangesAsync(ct);
+            await audit.RecordAsync(ApiSupport.CurrentUserId(http.User), "community_created", "community", community.Id, ct);
+            return Results.Created($"/api/admin/communities/{community.Id}", new { community.Id, community.Name, community.Slug, community.Description, community.Guidelines, community.Status, community.ConditionId });
+        }).RequireAuthorization("Admin");
+
+        app.MapPut("/api/admin/communities/{id:guid}", async (Guid id, AdminCommunityRequest request, HttpContext http,
+            PeerCareDbContext db, PeerAuditService audit, CancellationToken ct) =>
+        {
+            var community = await db.Communities.SingleOrDefaultAsync(c => c.Id == id, ct);
+            if (community is null) return Results.NotFound();
+            var name = request.Name.Trim();
+            var slug = NormalizeCommunitySlug(request.Slug);
+            var description = request.Description.Trim();
+            var guidelines = request.Guidelines.Trim();
+            var status = request.Status.Trim().ToLowerInvariant();
+            if (name.Length is < 2 or > 120 || slug.Length is < 2 or > 120 || description.Length > 1000 ||
+                guidelines.Length > 3000 || status is not ("active" or "inactive"))
+                return Results.BadRequest(new { message = "Check the community name, slug, description, guidelines, and status." });
+            if (await db.Communities.AnyAsync(c => c.Id != id && c.Slug == slug, ct))
+                return Results.Conflict(new { message = "A community with that URL slug already exists." });
+            if (request.ConditionId is not null && !await db.Conditions.AnyAsync(c => c.Id == request.ConditionId, ct))
+                return Results.BadRequest(new { message = "Choose a valid topic or leave it unassigned." });
+
+            community.Name = name;
+            community.Slug = slug;
+            community.Description = description;
+            community.Guidelines = guidelines;
+            community.Status = status;
+            community.ConditionId = request.ConditionId;
+            await db.SaveChangesAsync(ct);
+            await audit.RecordAsync(ApiSupport.CurrentUserId(http.User), "community_updated", "community", community.Id, ct);
+            return Results.Ok(new { community.Id, community.Name, community.Slug, community.Description, community.Guidelines, community.Status, community.ConditionId });
+        }).RequireAuthorization("Admin");
+
+        app.MapDelete("/api/admin/communities/{id:guid}", async (Guid id, HttpContext http,
+            PeerCareDbContext db, PeerAuditService audit, CancellationToken ct) =>
+        {
+            var community = await db.Communities.SingleOrDefaultAsync(c => c.Id == id, ct);
+            if (community is null) return Results.NotFound();
+            community.Status = "inactive";
+            await db.SaveChangesAsync(ct);
+            await audit.RecordAsync(ApiSupport.CurrentUserId(http.User), "community_deactivated", "community", id, ct);
+            return Results.Ok(new { community.Id, community.Status });
+        }).RequireAuthorization("Admin");
+    }
+
+    private static string NormalizeCommunitySlug(string value)
+    {
+        var slug = new string(value.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
+        while (slug.Contains("--")) slug = slug.Replace("--", "-");
+        return slug;
     }
 }
