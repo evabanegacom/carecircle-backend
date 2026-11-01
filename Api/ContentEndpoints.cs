@@ -36,8 +36,7 @@ public static class ContentEndpoints
                 var search = q.Trim()[..Math.Min(q.Trim().Length, 120)];
                 if (db.Database.IsNpgsql())
                 {
-                    var tsQuery = EF.Functions.PlainToTsQuery("english", search);
-                    query = query.Where(p => p.SearchVector.Matches(tsQuery) || p.Replies.Any(r => r.Status == "published" && r.Body.ToLower().Contains(search.ToLower())) || p.Condition!.Name.ToLower().Contains(search.ToLower()));
+                    query = query.Where(p => p.SearchVector.Matches(EF.Functions.PlainToTsQuery("english", search)) || p.Replies.Any(r => r.Status == "published" && r.Body.ToLower().Contains(search.ToLower())) || p.Condition!.Name.ToLower().Contains(search.ToLower()));
                 }
                 else
                 {

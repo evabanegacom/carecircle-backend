@@ -156,3 +156,4 @@ C:\Users\precious\AppData\Local\Temp\healthstories-build\PeerCare.deps.json
 C:\Users\precious\AppData\Local\Temp\healthstories-build\PeerCare.runtimeconfig.json
 C:\Users\precious\AppData\Local\Temp\healthstories-build\PeerCare.dll
 C:\Users\precious\AppData\Local\Temp\healthstories-build\PeerCare.pdb
+C:\Users\precious\Desktop\carecircle\PeerCare\obj\Debug\net10.0\PeerCare.sourcelink.json
