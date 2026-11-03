@@ -48,6 +48,9 @@ public sealed class PeerCareDbContext(DbContextOptions<PeerCareDbContext> option
             entity.Property(u => u.Email).HasConversion(emailConverter);
             entity.Property(u => u.PhoneNumber).HasConversion(phoneConverter);
             entity.Property(u => u.DisplayName).HasMaxLength(80);
+            entity.Property(u => u.NormalizedDisplayName).HasMaxLength(80);
+            entity.HasIndex(u => u.NormalizedDisplayName).IsUnique()
+                .HasFilter("\"NormalizedDisplayName\" IS NOT NULL");
             entity.Property(u => u.Bio).HasMaxLength(500);
             entity.Property(u => u.ProfileVisibility).HasMaxLength(24).HasDefaultValue("public");
             entity.Property(u => u.PhoneBlindIndex).HasMaxLength(64);

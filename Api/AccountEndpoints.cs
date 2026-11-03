@@ -18,8 +18,13 @@ public static class AccountEndpoints
             var user = await ApiSupport.CurrentUserAsync(http.User, db, ct);
             if (user is null) return Results.Unauthorized();
             var name = request.DisplayName.Trim();
-            if (name.Length is < 2 or > 80) return Results.BadRequest(new { message = "Choose a display name between 2 and 80 characters." });
+            if (name.Length is < 2 or > 80) return Results.BadRequest(new { message = "Choose a username between 2 and 80 characters." });
+            var normalizedName = PublicUsername.Normalize(name);
+            var keepLegacyName = user.NormalizedDisplayName is null && string.Equals(name, user.DisplayName, StringComparison.Ordinal);
+            if (!keepLegacyName && await PublicUsername.IsTakenAsync(db, user.Id, normalizedName, ct))
+                return Results.Conflict(new { message = PublicUsername.DuplicateMessage });
             user.DisplayName = name;
+            user.NormalizedDisplayName = keepLegacyName ? null : normalizedName;
             user.State = CleanLocation(request.State, "Lagos");
             user.City = CleanLocation(request.City, "Lagos");
             var selected = (request.Conditions ?? []).Distinct().ToArray();
@@ -28,7 +33,15 @@ public static class AccountEndpoints
             foreach (var conditionId in selected)
                 if (await db.Conditions.AnyAsync(c => c.Id == conditionId && c.Active, ct))
                     db.UserConditions.Add(new UserCondition { UserId = user.Id, ConditionId = conditionId });
-            await users.UpdateAsync(user);
+            try
+            {
+                var result = await users.UpdateAsync(user);
+                if (!result.Succeeded) return Results.BadRequest(new { message = "Could not save your profile." });
+            }
+            catch (DbUpdateException ex) when (PublicUsername.IsUniqueViolation(ex))
+            {
+                return Results.Conflict(new { message = PublicUsername.DuplicateMessage });
+            }
             return Results.Ok(new { saved = true });
         }).RequireAuthorization();
 
@@ -121,8 +134,14 @@ public static class AccountEndpoints
             var user = await ApiSupport.CurrentUserAsync(http.User, db, ct);
             if (user is null) return Results.Unauthorized();
             if (!ApiSupport.HasConsent(user, config)) return Results.Conflict(new { message = "Accept the health data consent before changing account settings." });
-            if (request.DisplayName.Trim().Length is < 2 or > 80) return Results.BadRequest(new { message = "Choose a display name between 2 and 80 characters." });
-            user.DisplayName = request.DisplayName.Trim();
+            var displayName = request.DisplayName.Trim();
+            if (displayName.Length is < 2 or > 80) return Results.BadRequest(new { message = "Choose a username between 2 and 80 characters." });
+            var normalizedName = PublicUsername.Normalize(displayName);
+            var keepLegacyName = user.NormalizedDisplayName is null && string.Equals(displayName, user.DisplayName, StringComparison.Ordinal);
+            if (!keepLegacyName && await PublicUsername.IsTakenAsync(db, user.Id, normalizedName, ct))
+                return Results.Conflict(new { message = PublicUsername.DuplicateMessage });
+            user.DisplayName = displayName;
+            user.NormalizedDisplayName = keepLegacyName ? null : normalizedName;
             user.Bio = request.Bio?.Trim() is { Length: > 0 } bio ? bio[..Math.Min(bio.Length, 500)] : null;
             if (request.ProfileVisibility is not null)
             {
@@ -133,7 +152,12 @@ public static class AccountEndpoints
             user.City = CleanLocation(request.City, "Lagos");
             user.InAppNotifications = request.InAppNotifications;
             user.EmailNotifications = request.EmailNotifications && user.EmailConfirmed;
-            var result = await users.UpdateAsync(user);
+            IdentityResult result;
+            try { result = await users.UpdateAsync(user); }
+            catch (DbUpdateException ex) when (PublicUsername.IsUniqueViolation(ex))
+            {
+                return Results.Conflict(new { message = PublicUsername.DuplicateMessage });
+            }
             return result.Succeeded ? Results.Ok(new { saved = true }) : Results.BadRequest(new { message = "Could not save settings." });
         }).RequireAuthorization();
 

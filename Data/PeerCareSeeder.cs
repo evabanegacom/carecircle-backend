@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using PeerCare.Domain;
+using PeerCare.Services;
 
 namespace PeerCare.Data;
 
@@ -76,12 +77,12 @@ public static class PeerCareSeeder
         }
 
         if (!environment.IsDevelopment() || !configuration.GetValue("SeedData:EnableDemoContent", false) || await db.Posts.AnyAsync()) return;
-        var seedUser = new PeerUser { UserName = "community-stories", DisplayName = "Adaeze O.", EmailConfirmed = true, ConsentVersion = "demo", ConsentedAt = DateTimeOffset.UtcNow };
+        var seedUser = new PeerUser { UserName = "community-stories", DisplayName = "Adaeze O.", NormalizedDisplayName = PublicUsername.Normalize("Adaeze O."), EmailConfirmed = true, ConsentVersion = "demo", ConsentedAt = DateTimeOffset.UtcNow };
         var managerForSeed = services.GetRequiredService<UserManager<PeerUser>>();
         var created = await managerForSeed.CreateAsync(seedUser);
         if (!created.Succeeded) return;
         await managerForSeed.AddToRoleAsync(seedUser, "Member");
-        var questionUser = new PeerUser { UserName = "community-question", DisplayName = "Tomi's mum", EmailConfirmed = true, ConsentVersion = "demo", ConsentedAt = DateTimeOffset.UtcNow };
+        var questionUser = new PeerUser { UserName = "community-question", DisplayName = "Tomi's mum", NormalizedDisplayName = PublicUsername.Normalize("Tomi's mum"), EmailConfirmed = true, ConsentVersion = "demo", ConsentedAt = DateTimeOffset.UtcNow };
         if (!(await managerForSeed.CreateAsync(questionUser)).Succeeded) questionUser = seedUser;
         else await managerForSeed.AddToRoleAsync(questionUser, "Member");
         var bySlug = await db.Conditions.ToDictionaryAsync(x => x.Slug);

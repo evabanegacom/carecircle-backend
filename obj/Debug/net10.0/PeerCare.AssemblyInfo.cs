@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("PeerCare")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+984fd81155dd1021bdb9fe1dc54be71e79459938")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+3b0c67f35ec661ce8bc6bb7874e01fc8ae32a920")]
 [assembly: System.Reflection.AssemblyProductAttribute("PeerCare")]
 [assembly: System.Reflection.AssemblyTitleAttribute("PeerCare")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

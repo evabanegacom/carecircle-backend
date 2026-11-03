@@ -925,6 +925,10 @@ namespace PeerCare.Data.Migrations
                     b.Property<DateTimeOffset?>("LockoutEnd")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<string>("NormalizedDisplayName")
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)");
+
                     b.Property<string>("NormalizedEmail")
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
@@ -971,6 +975,10 @@ namespace PeerCare.Data.Migrations
                         .HasColumnType("character varying(256)");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("NormalizedDisplayName")
+                        .IsUnique()
+                        .HasFilter("\"NormalizedDisplayName\" IS NOT NULL");
 
                     b.HasIndex("NormalizedEmail")
                         .IsUnique()

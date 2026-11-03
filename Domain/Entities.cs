@@ -6,6 +6,7 @@ namespace PeerCare.Domain;
 public sealed class PeerUser : IdentityUser<Guid>
 {
     public string DisplayName { get; set; } = "";
+    public string? NormalizedDisplayName { get; set; }
     public string? Bio { get; set; }
     public string ProfileVisibility { get; set; } = "public";
     public string? State { get; set; }
