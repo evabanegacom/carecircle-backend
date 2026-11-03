@@ -11,16 +11,15 @@ namespace PeerCare.Data.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            // UserId1 was introduced by the initial model as a nullable shadow FK.
+            // Remove its unused constraint and index, but retain the column so any
+            // values written before this model correction are preserved.
             migrationBuilder.DropForeignKey(
                 name: "FK_professional_verifications_users_UserId1",
                 table: "professional_verifications");
 
             migrationBuilder.DropIndex(
                 name: "IX_professional_verifications_UserId1",
-                table: "professional_verifications");
-
-            migrationBuilder.DropColumn(
-                name: "UserId1",
                 table: "professional_verifications");
 
             migrationBuilder.AddColumn<string>(
@@ -289,23 +288,11 @@ namespace PeerCare.Data.Migrations
                 name: "Source",
                 table: "facilities");
 
-            migrationBuilder.AddColumn<Guid>(
-                name: "UserId1",
-                table: "professional_verifications",
-                type: "uuid",
-                nullable: true);
-
             migrationBuilder.CreateIndex(
                 name: "IX_professional_verifications_UserId1",
                 table: "professional_verifications",
                 column: "UserId1");
 
-            migrationBuilder.AddForeignKey(
-                name: "FK_professional_verifications_users_UserId1",
-                table: "professional_verifications",
-                column: "UserId1",
-                principalTable: "users",
-                principalColumn: "Id");
         }
     }
 }

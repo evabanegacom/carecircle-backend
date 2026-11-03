@@ -24,8 +24,7 @@ public sealed class PeerCareDesignTimeFactory : IDesignTimeDbContextFactory<Peer
         var provider = services.BuildServiceProvider();
         var crypto = new ContactCrypto(provider.GetRequiredService<IDataProtectionProvider>(), configuration, new DesignEnvironment());
         var options = new DbContextOptionsBuilder<PeerCareDbContext>()
-            .UseNpgsql(configuration.GetConnectionString("PeerCare")
-                ?? throw new InvalidOperationException("ConnectionStrings:PeerCare must be configured for EF design-time operations."))
+            .UseNpgsql(PeerCareConnectionString.Normalize(configuration.GetConnectionString("PeerCare")))
             .Options;
         return new PeerCareDbContext(options, crypto);
     }

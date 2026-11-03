@@ -21,6 +21,14 @@ builder.Services.AddDataProtection().SetApplicationName("PeerCare").PersistKeysT
 builder.Services.AddSingleton<ContactCrypto>();
 builder.Services.AddSingleton<ILookupNormalizer, HmacLookupNormalizer>();
 var databaseProvider = builder.Configuration["Database:Provider"] ?? "PostgreSQL";
+var rawPostgresConnectionString = builder.Configuration.GetConnectionString("PeerCare");
+string? postgresConnectionString = null;
+if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+{
+    if (string.IsNullOrWhiteSpace(rawPostgresConnectionString))
+        throw new InvalidOperationException("ConnectionStrings:PeerCare must be configured through a secure environment variable or local development settings.");
+    postgresConnectionString = PeerCareConnectionString.Normalize(rawPostgresConnectionString);
+}
 builder.Services.AddDbContext<PeerCareDbContext>(options =>
 {
     if (databaseProvider.Equals("SQLite", StringComparison.OrdinalIgnoreCase))
@@ -29,7 +37,7 @@ builder.Services.AddDbContext<PeerCareDbContext>(options =>
         options.UseSqlite($"Data Source={Path.Combine(builder.Environment.ContentRootPath, databaseFile)}");
     }
     else if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
-        options.UseNpgsql(builder.Configuration.GetConnectionString("PeerCare"), npgsql => npgsql.EnableRetryOnFailure(3));
+        options.UseNpgsql(postgresConnectionString!, npgsql => npgsql.EnableRetryOnFailure(3));
     else throw new InvalidOperationException("Database:Provider must be SQLite or PostgreSQL.");
 });
 builder.Services.AddIdentity<PeerUser, PeerRole>(options =>
