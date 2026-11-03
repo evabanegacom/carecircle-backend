@@ -1,0 +1,33 @@
+# Source control and editor state
+.git
+.vs
+.vscode
+
+# Build output
+bin/
+obj/
+publish/
+artifacts/
+
+# Local configuration and secrets
+.env
+.env.*
+!.env.example
+appsettings.*.json
+secrets.json
+secrets.*.json
+
+# Local databases and development data
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3
+.appdata/
+.dotnet-home/
+.local-data-protection-keys/
+DataProtectionKeys/
+aspnetcore-https/
+TestResults/
+coverage/
+*.log
