@@ -10,22 +10,27 @@ public static class CommunityEndpoints
 {
     public static void MapPeerCareCommunities(this WebApplication app)
     {
-        app.MapGet("/api/communities", async (string? q, PeerCareDbContext db, HttpContext http, CancellationToken ct) =>
+        app.MapGet("/api/communities", async (string? q, int? page, int? pageSize, PeerCareDbContext db, HttpContext http, CancellationToken ct) =>
         {
             var viewerId = ApiSupport.CurrentUserId(http.User);
+            var currentPage = Math.Max(1, page ?? 1);
+            var size = Math.Clamp(pageSize ?? 12, 1, 50);
+            var offset = (int)Math.Min((long)(currentPage - 1) * size, int.MaxValue);
             var query = db.Communities.AsNoTracking().Where(c => c.Status == "active");
             if (!string.IsNullOrWhiteSpace(q))
             {
                 var term = q.Trim().ToLower();
                 query = query.Where(c => c.Name.ToLower().Contains(term) || c.Description.ToLower().Contains(term) || c.Condition!.Name.ToLower().Contains(term));
             }
-            var items = await query.OrderBy(c => c.Name).Select(c => new
+            var rows = await query.OrderBy(c => c.Name).ThenBy(c => c.Id).Skip(offset).Take(size + 1).Select(c => new
             {
                 c.Id, c.Name, c.Slug, c.Description, c.Guidelines, condition = c.Condition == null ? null : c.Condition.Name,
                 memberCount = db.CommunityMemberships.Count(m => m.CommunityId == c.Id && m.Status == "joined"),
                 isJoined = viewerId != null && db.CommunityMemberships.Any(m => m.CommunityId == c.Id && m.UserId == viewerId && m.Status == "joined")
-            }).Take(100).ToListAsync(ct);
-            return Results.Ok(items);
+            }).ToListAsync(ct);
+            var hasMore = rows.Count > size;
+            var items = rows.Take(size);
+            return Results.Ok(new { items, page = currentPage, pageSize = size, hasMore });
         }).RequireRateLimiting("search");
 
         app.MapGet("/api/communities/{slug}", async (string slug, PeerCareDbContext db, HttpContext http, CancellationToken ct) =>
