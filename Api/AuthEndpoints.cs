@@ -76,9 +76,7 @@ public static class AuthEndpoints
             }
 
             db.OtpChallenges.Remove(challenge);
-            PeerUser? user = type == "email"
-                ? await users.FindByEmailAsync(contact)
-                : await db.Users.SingleOrDefaultAsync(x => x.PhoneBlindIndex == index, ct);
+            PeerUser? user = await FindOrRecoverVerifiedUserAsync(type, contact, index, db, users, crypto, logger, ct);
             if (user is null)
             {
                 user = new PeerUser
@@ -154,5 +152,80 @@ public static class AuthEndpoints
         else if (digits.Length == 10) digits = "234" + digits;
         if (digits.Length is < 10 or > 15) return null;
         return ("phone", "+" + digits);
+    }
+
+    private static async Task<PeerUser?> FindOrRecoverVerifiedUserAsync(
+        string type,
+        string contact,
+        string contactIndex,
+        PeerCareDbContext db,
+        UserManager<PeerUser> users,
+        ContactCrypto crypto,
+        ILogger<PeerUser> logger,
+        CancellationToken ct)
+    {
+        // Project only the ID first; materializing PeerUser would unprotect both contact fields.
+        Guid? userId = type == "email"
+            ? await db.Users.Where(x => x.NormalizedEmail == crypto.BlindIndex(contact))
+                .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct)
+            : await db.Users.Where(x => x.PhoneBlindIndex == contactIndex)
+                .Select(x => (Guid?)x.Id).SingleOrDefaultAsync(ct);
+        if (userId is null) return null;
+
+        string? storedEmail;
+        string? storedPhone;
+        var connection = db.Database.GetDbConnection();
+        var openedHere = connection.State != System.Data.ConnectionState.Open;
+        if (openedHere) await db.Database.OpenConnectionAsync(ct);
+        try
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT \"Email\", \"PhoneNumber\" FROM \"users\" WHERE \"Id\" = @userId";
+            var parameter = command.CreateParameter();
+            parameter.ParameterName = "userId";
+            parameter.Value = userId.Value;
+            command.Parameters.Add(parameter);
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            if (!await reader.ReadAsync(ct)) return null;
+            storedEmail = reader.IsDBNull(0) ? null : reader.GetString(0);
+            storedPhone = reader.IsDBNull(1) ? null : reader.GetString(1);
+        }
+        finally
+        {
+            if (openedHere) await db.Database.CloseConnectionAsync();
+        }
+
+        var unreadableEmail = IsUnreadable(storedEmail, crypto.UnprotectEmail);
+        var unreadablePhone = IsUnreadable(storedPhone, crypto.UnprotectPhone);
+        if (unreadableEmail)
+        {
+            var replacement = type == "email" ? contact : null;
+            await db.Users.Where(x => x.Id == userId.Value)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.Email, replacement), ct);
+            logger.LogWarning("Recovered unreadable Identity property PeerUser.Email for user {UserId} after a verified {ContactType} OTP.", userId, type);
+        }
+        if (unreadablePhone)
+        {
+            var replacement = type == "phone" ? contact : null;
+            await db.Users.Where(x => x.Id == userId.Value)
+                .ExecuteUpdateAsync(update => update.SetProperty(x => x.PhoneNumber, replacement), ct);
+            logger.LogWarning("Recovered unreadable Identity property PeerUser.PhoneNumber for user {UserId} after a verified {ContactType} OTP.", userId, type);
+        }
+
+        return await users.FindByIdAsync(userId.Value.ToString());
+    }
+
+    private static bool IsUnreadable(string? protectedValue, Func<string, string> unprotect)
+    {
+        if (protectedValue is null) return false;
+        try
+        {
+            _ = unprotect(protectedValue);
+            return false;
+        }
+        catch (CryptographicException)
+        {
+            return true;
+        }
     }
 }
