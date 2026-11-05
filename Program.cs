@@ -1,26 +1,69 @@
 using System.Threading.RateLimiting;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using Microsoft.AspNetCore.Antiforgery;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using PeerCare.Api;
 using PeerCare.Data;
 using PeerCare.Domain;
 using PeerCare.Services;
 
 var builder = WebApplication.CreateBuilder(args);
-var keyRingPath = builder.Configuration["Security:DataProtectionKeysPath"];
-if (string.IsNullOrWhiteSpace(keyRingPath) && builder.Environment.IsDevelopment())
-    keyRingPath = Path.Combine(builder.Environment.ContentRootPath, ".local-data-protection-keys");
-if (string.IsNullOrWhiteSpace(keyRingPath) && !builder.Environment.IsDevelopment())
-    throw new InvalidOperationException("Security:DataProtectionKeysPath must point to a persistent, protected key ring outside development.");
-Directory.CreateDirectory(keyRingPath!);
-builder.Services.AddDataProtection().SetApplicationName("PeerCare").PersistKeysToFileSystem(new DirectoryInfo(keyRingPath!));
+var databaseProvider = builder.Configuration["Database:Provider"] ?? "PostgreSQL";
+var dataProtection = builder.Services.AddDataProtection().SetApplicationName("PeerCare");
+X509Certificate2? dataProtectionCertificate = null;
+if (builder.Environment.IsDevelopment())
+{
+    // Keep local development and SQLite independent of the production Neon database.
+    var keyRingPath = Path.Combine(builder.Environment.ContentRootPath, ".local-data-protection-keys");
+    Directory.CreateDirectory(keyRingPath);
+    dataProtection.PersistKeysToFileSystem(new DirectoryInfo(keyRingPath));
+}
+else
+{
+    var certificateBase64 = builder.Configuration["Security:DataProtectionCertificateBase64"];
+    var certificatePassword = builder.Configuration["Security:DataProtectionCertificatePassword"];
+    if (string.IsNullOrWhiteSpace(certificateBase64) || string.IsNullOrWhiteSpace(certificatePassword))
+        throw new InvalidOperationException("Production requires Security:DataProtectionCertificateBase64 and Security:DataProtectionCertificatePassword.");
+
+    try
+    {
+        var certificateBytes = Convert.FromBase64String(certificateBase64);
+        try
+        {
+            var loadedCertificate = X509CertificateLoader.LoadPkcs12(
+                certificateBytes, certificatePassword, X509KeyStorageFlags.EphemeralKeySet);
+            if (!loadedCertificate.HasPrivateKey)
+            {
+                loadedCertificate.Dispose();
+                throw new InvalidOperationException("The configured Data Protection certificate must include its private key.");
+            }
+            dataProtectionCertificate = loadedCertificate;
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(certificateBytes);
+        }
+    }
+    catch (FormatException)
+    {
+        throw new InvalidOperationException("Security:DataProtectionCertificateBase64 must contain a valid base64-encoded PFX certificate.");
+    }
+    catch (CryptographicException)
+    {
+        throw new InvalidOperationException("The configured Data Protection certificate could not be loaded. Check the PFX and its password.");
+    }
+
+    dataProtection.PersistKeysToDbContext<PeerCareDbContext>()
+        .ProtectKeysWithCertificate(dataProtectionCertificate!);
+}
 builder.Services.AddSingleton<ContactCrypto>();
 builder.Services.AddSingleton<ILookupNormalizer, HmacLookupNormalizer>();
-var databaseProvider = builder.Configuration["Database:Provider"] ?? "PostgreSQL";
 var rawPostgresConnectionString = builder.Configuration.GetConnectionString("PeerCare");
 string? postgresConnectionString = null;
 if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
@@ -97,6 +140,14 @@ builder.Services.AddAuthorization(options =>
 });
 
 var app = builder.Build();
+if (dataProtectionCertificate is not null)
+    app.Lifetime.ApplicationStopped.Register(dataProtectionCertificate.Dispose);
+if (databaseProvider.Equals("PostgreSQL", StringComparison.OrdinalIgnoreCase))
+{
+    var databaseTarget = new NpgsqlConnectionStringBuilder(postgresConnectionString);
+    app.Logger.LogInformation("PostgreSQL target configured: host={DatabaseHost}, database={DatabaseName}",
+        databaseTarget.Host, databaseTarget.Database);
+}
 if (!app.Environment.IsDevelopment()) { app.UseHsts(); app.UseHttpsRedirection(); }
 app.Use(async (context, next) =>
 {

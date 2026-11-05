@@ -16,8 +16,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app
 
 ENV ASPNETCORE_ENVIRONMENT=Production \
-    PORT=10000 \
-    Security__DataProtectionKeysPath=/tmp/peercare-dp-keys
+    PORT=10000
 
 EXPOSE 10000
 

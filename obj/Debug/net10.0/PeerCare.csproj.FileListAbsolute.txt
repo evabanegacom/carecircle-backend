@@ -166,3 +166,4 @@ C:\Users\precious\Desktop\carecircle\.build-check\PeerCare.deps.json
 C:\Users\precious\Desktop\carecircle\.build-check\PeerCare.runtimeconfig.json
 C:\Users\precious\Desktop\carecircle\.build-check\PeerCare.dll
 C:\Users\precious\Desktop\carecircle\.build-check\PeerCare.pdb
+C:\Users\precious\Desktop\carecircle\PeerCare\bin\Debug\net10.0\Microsoft.AspNetCore.DataProtection.EntityFrameworkCore.dll

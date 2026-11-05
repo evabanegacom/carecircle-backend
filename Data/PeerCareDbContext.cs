@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -7,7 +8,7 @@ using PeerCare.Services;
 namespace PeerCare.Data;
 
 public sealed class PeerCareDbContext(DbContextOptions<PeerCareDbContext> options, ContactCrypto crypto)
-    : IdentityDbContext<PeerUser, PeerRole, Guid>(options)
+    : IdentityDbContext<PeerUser, PeerRole, Guid>(options), IDataProtectionKeyContext
 {
     public DbSet<PeerPost> Posts => Set<PeerPost>();
     public DbSet<PeerReply> Replies => Set<PeerReply>();
@@ -34,6 +35,7 @@ public sealed class PeerCareDbContext(DbContextOptions<PeerCareDbContext> option
     public DbSet<ProviderReview> ProviderReviews => Set<ProviderReview>();
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<ModerationAppeal> ModerationAppeals => Set<ModerationAppeal>();
+    public DbSet<DataProtectionKey> DataProtectionKeys { get; set; } = null!;
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

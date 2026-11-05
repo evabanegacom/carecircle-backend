@@ -1,10 +1,11 @@
 {
   "version": 2,
-  "dgSpecHash": "6+kQIc6uAWo=",
+  "dgSpecHash": "hBLY9g+6P3s=",
   "success": true,
   "projectFilePath": "C:\\Users\\precious\\Desktop\\carecircle\\PeerCare\\PeerCare.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\precious\\.nuget\\packages\\humanizer.core\\2.14.1\\humanizer.core.2.14.1.nupkg.sha512",
+    "C:\\Users\\precious\\.nuget\\packages\\microsoft.aspnetcore.dataprotection.entityframeworkcore\\10.0.13\\microsoft.aspnetcore.dataprotection.entityframeworkcore.10.0.13.nupkg.sha512",
     "C:\\Users\\precious\\.nuget\\packages\\microsoft.aspnetcore.identity.entityframeworkcore\\10.0.13\\microsoft.aspnetcore.identity.entityframeworkcore.10.0.13.nupkg.sha512",
     "C:\\Users\\precious\\.nuget\\packages\\microsoft.build.framework\\18.0.2\\microsoft.build.framework.18.0.2.nupkg.sha512",
     "C:\\Users\\precious\\.nuget\\packages\\microsoft.codeanalysis.analyzers\\3.11.0\\microsoft.codeanalysis.analyzers.3.11.0.nupkg.sha512",
