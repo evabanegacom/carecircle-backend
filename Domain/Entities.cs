@@ -140,6 +140,20 @@ public sealed class CommunityMembership
     public DateTimeOffset JoinedAt { get; set; } = DateTimeOffset.UtcNow;
 }
 
+public sealed class CommunityCheckIn
+{
+    public Guid Id { get; set; } = Guid.NewGuid();
+    public Guid CommunityId { get; set; }
+    public Guid UserId { get; set; }
+    public DateOnly WeekOf { get; set; }
+    public string Mood { get; set; } = "okay";
+    public string SupportNeed { get; set; } = "just_checking_in";
+    public string? Note { get; set; }
+    public bool IsAnonymous { get; set; } = true;
+    public DateTimeOffset CreatedAt { get; set; } = DateTimeOffset.UtcNow;
+    public DateTimeOffset UpdatedAt { get; set; } = DateTimeOffset.UtcNow;
+}
+
 public sealed class ProviderReview
 {
     public Guid Id { get; set; } = Guid.NewGuid();

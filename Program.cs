@@ -238,6 +238,15 @@ if (!app.Environment.IsEnvironment("Migration"))
                 FOREIGN KEY (UserId) REFERENCES users (Id) ON DELETE CASCADE
             );
             CREATE INDEX IF NOT EXISTS IX_community_memberships_UserId_Status ON community_memberships (UserId, Status);
+            CREATE TABLE IF NOT EXISTS community_check_ins (
+                Id TEXT NOT NULL PRIMARY KEY, CommunityId TEXT NOT NULL, UserId TEXT NOT NULL, WeekOf TEXT NOT NULL,
+                Mood TEXT NOT NULL, SupportNeed TEXT NOT NULL, Note TEXT NULL, IsAnonymous INTEGER NOT NULL,
+                CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL,
+                FOREIGN KEY (CommunityId) REFERENCES communities (Id) ON DELETE CASCADE,
+                FOREIGN KEY (UserId) REFERENCES users (Id) ON DELETE CASCADE
+            );
+            CREATE UNIQUE INDEX IF NOT EXISTS IX_community_check_ins_CommunityId_UserId_WeekOf ON community_check_ins (CommunityId, UserId, WeekOf);
+            CREATE INDEX IF NOT EXISTS IX_community_check_ins_CommunityId_WeekOf_CreatedAt ON community_check_ins (CommunityId, WeekOf, CreatedAt);
             CREATE TABLE IF NOT EXISTS provider_reviews (
                 Id TEXT NOT NULL PRIMARY KEY, FacilityId TEXT NOT NULL, UserId TEXT NOT NULL, Rating INTEGER NULL,
                 ReviewText TEXT NOT NULL, VisitDate TEXT NULL, Status TEXT NOT NULL, CreatedAt TEXT NOT NULL, UpdatedAt TEXT NOT NULL,

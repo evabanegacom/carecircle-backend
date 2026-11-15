@@ -32,6 +32,7 @@ public sealed class PeerCareDbContext(DbContextOptions<PeerCareDbContext> option
     public DbSet<HealthEntry> HealthEntries => Set<HealthEntry>();
     public DbSet<Community> Communities => Set<Community>();
     public DbSet<CommunityMembership> CommunityMemberships => Set<CommunityMembership>();
+    public DbSet<CommunityCheckIn> CommunityCheckIns => Set<CommunityCheckIn>();
     public DbSet<ProviderReview> ProviderReviews => Set<ProviderReview>();
     public DbSet<UserBlock> UserBlocks => Set<UserBlock>();
     public DbSet<ModerationAppeal> ModerationAppeals => Set<ModerationAppeal>();
@@ -247,6 +248,17 @@ public sealed class PeerCareDbContext(DbContextOptions<PeerCareDbContext> option
             entity.HasIndex(m => new { m.UserId, m.Status });
             entity.HasOne<Community>().WithMany().HasForeignKey(m => m.CommunityId).OnDelete(DeleteBehavior.Cascade);
             entity.HasOne<PeerUser>().WithMany().HasForeignKey(m => m.UserId).OnDelete(DeleteBehavior.Cascade);
+        });
+        modelBuilder.Entity<CommunityCheckIn>(entity =>
+        {
+            entity.ToTable("community_check_ins");
+            entity.Property(c => c.Mood).HasMaxLength(24);
+            entity.Property(c => c.SupportNeed).HasMaxLength(32);
+            entity.Property(c => c.Note).HasMaxLength(240);
+            entity.HasIndex(c => new { c.CommunityId, c.WeekOf, c.CreatedAt });
+            entity.HasIndex(c => new { c.CommunityId, c.UserId, c.WeekOf }).IsUnique();
+            entity.HasOne<Community>().WithMany().HasForeignKey(c => c.CommunityId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<PeerUser>().WithMany().HasForeignKey(c => c.UserId).OnDelete(DeleteBehavior.Cascade);
         });
         modelBuilder.Entity<ProviderReview>(entity =>
         {

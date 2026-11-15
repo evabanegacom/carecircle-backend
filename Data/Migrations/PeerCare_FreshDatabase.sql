@@ -514,6 +514,28 @@ CREATE INDEX "IX_communities_Status_Name" ON communities ("Status", "Name");
 
 CREATE INDEX "IX_community_memberships_UserId_Status" ON community_memberships ("UserId", "Status");
 
+CREATE TABLE community_check_ins (
+    "Id" uuid NOT NULL,
+    "CommunityId" uuid NOT NULL,
+    "UserId" uuid NOT NULL,
+    "WeekOf" date NOT NULL,
+    "Mood" character varying(24) NOT NULL,
+    "SupportNeed" character varying(32) NOT NULL,
+    "Note" character varying(240),
+    "IsAnonymous" boolean NOT NULL,
+    "CreatedAt" timestamp with time zone NOT NULL,
+    "UpdatedAt" timestamp with time zone NOT NULL,
+    CONSTRAINT "PK_community_check_ins" PRIMARY KEY ("Id"),
+    CONSTRAINT "FK_community_check_ins_communities_CommunityId" FOREIGN KEY ("CommunityId") REFERENCES communities ("Id") ON DELETE CASCADE,
+    CONSTRAINT "FK_community_check_ins_users_UserId" FOREIGN KEY ("UserId") REFERENCES users ("Id") ON DELETE CASCADE
+);
+
+CREATE UNIQUE INDEX "IX_community_check_ins_CommunityId_UserId_WeekOf" ON community_check_ins ("CommunityId", "UserId", "WeekOf");
+
+CREATE INDEX "IX_community_check_ins_CommunityId_WeekOf_CreatedAt" ON community_check_ins ("CommunityId", "WeekOf", "CreatedAt");
+
+CREATE INDEX "IX_community_check_ins_UserId" ON community_check_ins ("UserId");
+
 CREATE INDEX "IX_moderation_appeals_ActionId" ON moderation_appeals ("ActionId");
 
 CREATE INDEX "IX_moderation_appeals_Status_CreatedAt" ON moderation_appeals ("Status", "CreatedAt");

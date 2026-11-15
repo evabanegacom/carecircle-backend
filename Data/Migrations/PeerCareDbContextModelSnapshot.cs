@@ -194,6 +194,56 @@ namespace PeerCare.Data.Migrations
                     b.ToTable("communities", (string)null);
                 });
 
+            modelBuilder.Entity("PeerCare.Domain.CommunityCheckIn", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("CommunityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTimeOffset>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsAnonymous")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Mood")
+                        .IsRequired()
+                        .HasMaxLength(24)
+                        .HasColumnType("character varying(24)");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<string>("SupportNeed")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("character varying(32)");
+
+                    b.Property<DateTimeOffset>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateOnly>("WeekOf")
+                        .HasColumnType("date");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.HasIndex("CommunityId", "UserId", "WeekOf")
+                        .IsUnique();
+
+                    b.HasIndex("CommunityId", "WeekOf", "CreatedAt");
+
+                    b.ToTable("community_check_ins", (string)null);
+                });
+
             modelBuilder.Entity("PeerCare.Domain.CommunityMembership", b =>
                 {
                     b.Property<Guid>("CommunityId")
@@ -1317,6 +1367,21 @@ namespace PeerCare.Data.Migrations
                         .OnDelete(DeleteBehavior.SetNull);
 
                     b.Navigation("Condition");
+                });
+
+            modelBuilder.Entity("PeerCare.Domain.CommunityCheckIn", b =>
+                {
+                    b.HasOne("PeerCare.Domain.Community", null)
+                        .WithMany()
+                        .HasForeignKey("CommunityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("PeerCare.Domain.PeerUser", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("PeerCare.Domain.CommunityMembership", b =>

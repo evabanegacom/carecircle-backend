@@ -43,5 +43,6 @@ public sealed record UserAppealRequest(Guid ActionId, string Reason);
 public sealed record AdminAppealRequest(string Status, string? DecisionNote);
 public sealed record AdminConditionRequest(string Name, string Category, bool Active = true);
 public sealed record AdminCommunityRequest(string Name, string Slug, string Description, string Guidelines, string Status, Guid? ConditionId);
+public sealed record CommunityCheckInRequest(string Mood, string SupportNeed, string? Note, bool IsAnonymous = true);
 public sealed record FacilityVerificationRequest(string? Source, DateTimeOffset? LastVerifiedAt);
 public sealed record ShareHealthEntriesRequest(Guid[] EntryIds, Guid ConditionId, string Title, bool Confirmed);

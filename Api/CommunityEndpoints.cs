@@ -50,6 +50,69 @@ public static class CommunityEndpoints
             return Results.Ok(new { community.Id, community.Name, community.Slug, community.Description, community.Guidelines, condition = community.Condition?.Name, memberCount = count, isJoined, posts });
         });
 
+        app.MapGet("/api/communities/{id:guid}/check-ins", async (Guid id, HttpContext http, PeerCareDbContext db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.CurrentUserId(http.User);
+            if (userId is null) return Results.Unauthorized();
+            var joined = await db.CommunityMemberships.AnyAsync(m => m.CommunityId == id && m.UserId == userId && m.Status == "joined", ct);
+            if (!joined) return Results.Forbid();
+            var weekOf = CurrentWeekOf();
+            var items = await db.CommunityCheckIns.AsNoTracking()
+                .Where(c => c.CommunityId == id && c.WeekOf >= weekOf.AddDays(-49))
+                .OrderByDescending(c => c.CreatedAt)
+                .Select(c => new { c.Id, c.WeekOf, c.Mood, c.SupportNeed, c.Note, c.IsAnonymous,
+                    author = c.IsAnonymous ? "Circle member" : db.Users.Where(u => u.Id == c.UserId).Select(u => u.DisplayName).FirstOrDefault(),
+                    isMine = c.UserId == userId, c.CreatedAt })
+                .Take(60).ToListAsync(ct);
+            return Results.Ok(new { weekOf, items });
+        }).RequireAuthorization().RequireRateLimiting("search");
+
+        app.MapPost("/api/communities/{id:guid}/check-ins", async (Guid id, CommunityCheckInRequest request, HttpContext http,
+            PeerCareDbContext db, IConfiguration config, CancellationToken ct) =>
+        {
+            var user = await ApiSupport.CurrentUserAsync(http.User, db, ct);
+            if (user is null) return Results.Unauthorized();
+            if (!ApiSupport.HasConsent(user, config)) return Results.Conflict(new { message = "Accept the community terms before checking in." });
+            if (!await db.Communities.AnyAsync(c => c.Id == id && c.Status == "active", ct)) return Results.NotFound();
+            if (!await db.CommunityMemberships.AnyAsync(m => m.CommunityId == id && m.UserId == user.Id && m.Status == "joined", ct))
+                return Results.Forbid();
+            var mood = request.Mood.Trim().ToLowerInvariant();
+            var supportNeed = request.SupportNeed.Trim().ToLowerInvariant();
+            if (mood is not ("good" or "okay" or "hard" or "mixed") ||
+                supportNeed is not ("listening" or "practical_tips" or "celebrate" or "just_checking_in"))
+                return Results.BadRequest(new { message = "Choose a check-in mood and a support preference." });
+            var note = string.IsNullOrWhiteSpace(request.Note) ? null : request.Note.Trim();
+            if (note?.Length > 240) return Results.BadRequest(new { message = "Keep your note to 240 characters." });
+            var scan = SafetyScanner.Scan(note);
+            if (scan.Emergency)
+                return Results.UnprocessableEntity(new { message = "If this is happening now, seek urgent care. This circle cannot respond as an emergency service." });
+            if (scan.Flags.Count > 0)
+                return Results.UnprocessableEntity(new { message = "Please remove contact details, medication amounts, links, sales language, or cure claims from your check-in." });
+            var weekOf = CurrentWeekOf();
+            var checkIn = await db.CommunityCheckIns.SingleOrDefaultAsync(c => c.CommunityId == id && c.UserId == user.Id && c.WeekOf == weekOf, ct);
+            if (checkIn is null)
+            {
+                checkIn = new CommunityCheckIn { CommunityId = id, UserId = user.Id, WeekOf = weekOf };
+                db.CommunityCheckIns.Add(checkIn);
+            }
+            checkIn.Mood = mood;
+            checkIn.SupportNeed = supportNeed;
+            checkIn.Note = note;
+            checkIn.IsAnonymous = request.IsAnonymous;
+            checkIn.UpdatedAt = DateTimeOffset.UtcNow;
+            await db.SaveChangesAsync(ct);
+            return Results.Ok(new { saved = true, checkIn.Id, checkIn.WeekOf });
+        }).RequireAuthorization().RequireRateLimiting("posting");
+
+        app.MapDelete("/api/communities/{id:guid}/check-ins/current", async (Guid id, HttpContext http, PeerCareDbContext db, CancellationToken ct) =>
+        {
+            var userId = ApiSupport.CurrentUserId(http.User);
+            if (userId is null) return Results.Unauthorized();
+            var checkIn = await db.CommunityCheckIns.SingleOrDefaultAsync(c => c.CommunityId == id && c.UserId == userId && c.WeekOf == CurrentWeekOf(), ct);
+            if (checkIn is not null) { db.CommunityCheckIns.Remove(checkIn); await db.SaveChangesAsync(ct); }
+            return Results.Ok(new { deleted = true });
+        }).RequireAuthorization();
+
         app.MapPost("/api/communities/{id:guid}/join", async (Guid id, HttpContext http, PeerCareDbContext db, IConfiguration config, CancellationToken ct) =>
         {
             var user = await ApiSupport.CurrentUserAsync(http.User, db, ct);
@@ -152,5 +215,12 @@ public static class CommunityEndpoints
         var slug = new string(value.Trim().ToLowerInvariant().Select(c => char.IsLetterOrDigit(c) ? c : '-').ToArray()).Trim('-');
         while (slug.Contains("--")) slug = slug.Replace("--", "-");
         return slug;
+    }
+
+    private static DateOnly CurrentWeekOf()
+    {
+        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var daysSinceMonday = ((int)today.DayOfWeek + 6) % 7;
+        return today.AddDays(-daysSinceMonday);
     }
 }
