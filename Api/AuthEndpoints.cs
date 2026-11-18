@@ -16,8 +16,8 @@ public static class AuthEndpoints
     {
         app.MapGet("/api/meta/consent", (IConfiguration config) => Results.Ok(new
         {
-            version = config["Consent:Version"] ?? "2026-10-v1",
-            text = config["Consent:Text"] ?? "PeerCare stores the health experiences you choose to share so they can help other families. You can post anonymously. Your health content is not sold, used for advertising, or shared to train outside models. These stories are personal experience, not medical advice. You can download or delete your data in settings.",
+            version = config["Consent:Version"] ?? "2026-11-v1",
+            text = config["Consent:Text"] ?? "HealthStories uses your contact details to secure your account and the information you choose to provide to operate your profile, community, stories and private health timeline. Public stories may be read by anyone; anonymous display hides your name from readers, not from the service. Private timeline notes are visible only to you unless you choose to share selected notes. We do not sell personal health information or use it for advertising. You can export or request deletion of your data in settings. Read the Privacy Policy before agreeing.",
             disclaimer = "This is one family's experience, not medical advice. Talk with a qualified health professional about your care."
         }));
 
@@ -75,10 +75,12 @@ public static class AuthEndpoints
                     : Results.BadRequest(new { message = $"That code did not match. {3 - challenge.FailedAttempts} attempts left." });
             }
 
-            db.OtpChallenges.Remove(challenge);
             PeerUser? user = await FindOrRecoverVerifiedUserAsync(type, contact, index, db, users, crypto, logger, ct);
             if (user is null)
             {
+                var consentVersion = config["Consent:Version"] ?? "2026-11-v1";
+                if (!request.PrivacyAccepted || request.PrivacyVersion != consentVersion)
+                    return Results.BadRequest(new { message = "Review and accept the current Privacy Policy before creating an account." });
                 user = new PeerUser
                 {
                     Id = Guid.NewGuid(),
@@ -90,6 +92,8 @@ public static class AuthEndpoints
                     PhoneNumberConfirmed = type == "phone",
                     PhoneBlindIndex = type == "phone" ? index : null,
                     Status = "active",
+                    ConsentVersion = consentVersion,
+                    ConsentedAt = DateTimeOffset.UtcNow,
                     CreatedAt = DateTimeOffset.UtcNow
                 };
                 var create = await users.CreateAsync(user);
@@ -100,16 +104,26 @@ public static class AuthEndpoints
                     return Results.Problem("We could not create the account. Please try again.", statusCode: 500);
                 }
                 await users.AddToRoleAsync(user, "Member");
+                db.Consents.Add(new PeerConsent { UserId = user.Id, Version = consentVersion, AcceptedAt = user.ConsentedAt.Value });
             }
             else if (user.Status != "active" || user.DeleteRequestedAt is not null)
             {
                 await db.SaveChangesAsync(ct);
                 return Results.Forbid();
             }
+            else if (request.PrivacyAccepted && request.PrivacyVersion == (config["Consent:Version"] ?? "2026-11-v1"))
+            {
+                var consentVersion = config["Consent:Version"] ?? "2026-11-v1";
+                user.ConsentVersion = consentVersion;
+                user.ConsentedAt = DateTimeOffset.UtcNow;
+                if (!await db.Consents.AnyAsync(c => c.UserId == user.Id && c.Version == consentVersion, ct))
+                    db.Consents.Add(new PeerConsent { UserId = user.Id, Version = consentVersion, AcceptedAt = user.ConsentedAt.Value });
+            }
             var bootstrap = config["Bootstrap:AdminEmail"];
             if (type == "email" && !string.IsNullOrWhiteSpace(bootstrap) && string.Equals(bootstrap.Trim(), contact, StringComparison.OrdinalIgnoreCase)
                 && !await users.IsInRoleAsync(user, "Admin"))
                 await users.AddToRoleAsync(user, "Admin");
+            db.OtpChallenges.Remove(challenge);
             await db.SaveChangesAsync(ct);
             await signIn.SignInAsync(user, isPersistent: true);
             var roles = await users.GetRolesAsync(user);

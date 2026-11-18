@@ -66,7 +66,7 @@ public static class AccountEndpoints
             }
             if (string.IsNullOrWhiteSpace(user.DisplayName))
                 return Results.BadRequest(new { message = "Choose a display name before accepting consent." });
-            var version = config["Consent:Version"] ?? "2026-10-v1";
+            var version = config["Consent:Version"] ?? "2026-11-v1";
             user.ConsentVersion = version;
             user.ConsentedAt = DateTimeOffset.UtcNow;
             user.InAppNotifications = request.InAppNotifications;

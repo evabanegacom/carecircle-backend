@@ -19,7 +19,7 @@ public static class ApiSupport
     }
 
     public static bool HasConsent(PeerUser user, IConfiguration configuration)
-        => user.ConsentedAt is not null && user.ConsentVersion == (configuration["Consent:Version"] ?? "2026-10-v1");
+        => user.ConsentedAt is not null && user.ConsentVersion == (configuration["Consent:Version"] ?? "2026-11-v1");
 
     public static object UserCard(PeerUser user, IEnumerable<string> roles) => new
     {

@@ -1,7 +1,7 @@
 namespace PeerCare.Contracts;
 
 public sealed record OtpStartRequest(string Contact, string? ContactType);
-public sealed record OtpVerifyRequest(string Contact, string Code, string? ContactType);
+public sealed record OtpVerifyRequest(string Contact, string Code, string? ContactType, bool PrivacyAccepted = false, string? PrivacyVersion = null);
 public sealed record OnboardingRequest(string DisplayName, string? State, string? City, IReadOnlyList<Guid>? Conditions);
 public sealed record ConsentRequest(bool Accepted, bool EmailNotifications, bool InAppNotifications);
 public sealed record SettingsRequest(string DisplayName, string? State, string? City, bool EmailNotifications, bool InAppNotifications, string? Bio = null, string? ProfileVisibility = null);
